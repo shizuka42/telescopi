@@ -2,12 +2,14 @@
 Description=Homecamera Telegram security bot
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/homecamera
 EnvironmentFile=/home/pi/homecamera/.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/pi/homecamera/venv/bin/python3 /home/pi/homecamera/homecamera.py
 Restart=always
 RestartSec=5

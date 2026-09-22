@@ -6,6 +6,21 @@ Projet initial https://github.com/justdaniele/rpisecuritycamerabot modifié pour
 - gérer les problèmes de connexion internet
 - ajouter un ping quotidien pour vérifier que le système est en ligne
 - autoriser plusieurs utilisateurs Telegram
+- utiliser **Picamera2** : détection de mouvement en continu sur un flux basse résolution, et **vidéo sans délai** (tampon circulaire : la vidéo commence quelques secondes *avant* la détection)
+- garantir la livraison Telegram : 3 essais immédiats, puis conservation sur disque et rejeu automatique (alertes, photos, vidéos et ping quotidien)
+
+Migrations et implémentations assistées par IA (principalement Claude Sonnet).
+
+## Fonctionnement
+
+- Une seule pipeline Picamera2 reste ouverte en permanence :
+  - flux `main` (1280x720 par défaut) encodé en H.264 par le matériel du Pi, écrit dans un **tampon circulaire** de quelques secondes ;
+  - flux `lores` (320x180) analysé environ 10 fois par seconde (soustraction de fond, filtrage du bruit, changement de luminosité ignoré).
+- Au déclenchement, le tampon est vidé dans un fichier et l'enregistrement continue : la vidéo contient les `PRE_ROLL_SECONDS` (5 s) **avant** le mouvement puis `MOTION_VIDEO_DURATION` (30 s) après. Une photo annotée (cadre rouge) est envoyée immédiatement.
+- `/photo` capture une image du flux en cours : instantané, même pendant un enregistrement. Sa résolution est celle du flux vidéo (`VIDEO_WIDTH` x `VIDEO_HEIGHT`).
+- `/video` enregistre `MANUAL_VIDEO_DURATION` secondes (plus le pré-enregistrement). Un seul clip à la fois : une demande pendant un enregistrement attend la fin du précédent.
+- Toutes les notifications passent par une **outbox** persistante (`CAPTURES_DIR/outbox`) : 3 essais immédiats par destinataire, puis l'élément reste sur disque (il survit aux redémarrages) et est rejoué toutes les 10 minutes, par destinataire, jusqu'à livraison. Un élément est supprimé après 10 jours ou si le disque a moins de 30 % d'espace libre (plus anciens d'abord). Un message rejoué en retard indique l'heure réelle de l'événement. Les réponses interactives aux commandes (ex. "Taking photo...") ne sont pas rejouées.
+- Un watchdog quitte le processus si la caméra ne fournit plus d'images pendant 60 s, pour que systemd le redémarre. Le ping quotidien indique aussi l'état de la caméra.
 
 ## Installation
 
@@ -41,9 +56,8 @@ Pour cela il faut d'abord connaitre son adresse MAC, donc il va falloir désacti
 - Insérez la carte dans le raspberry et branchez le. Attendez quelques minutes qu'il ait démarré et soit connecté au wifi.
 - Depuis votre ordinateur (sur le même réseau WiFi), connectez-vous en SSH : `ssh utilisateur_admin@homepi.local`
 - Mise à jour du système : `sudo apt update && sudo apt full-upgrade -y`
-- Activation de la caméra : `sudo raspi-config` > Interface Options > Camera
-- Redémmarez le raspberry : `sudo reboot`
-- Après redémarrage, se reconnecter en ssh puis vérifier les caméras disponibles : `rpicam-hello --list-cameras`
+- Redémarrez le raspberry : `sudo reboot`
+- Après redémarrage, se reconnecter en ssh puis vérifier que la caméra est détectée : `rpicam-hello --list-cameras` (doit afficher `imx219` pour la Camera Module v2). Si rien n'apparaît, vérifier le branchement du câble ruban (Pi éteint).
 
 Si votre réseau wifi local est configuré avec une restriction par liste blanche d'adresse MAC, il faut que le raspberry pi utilise toujours la même adresse :
 
@@ -104,28 +118,65 @@ chown pi:pi /home/pi/homecamera/.env
 # ALLOWED_USER_IDS=111111,222222
 # PING_TIME=08:30 #si besoin de changer l'heure de la vérification quotidienne
 # CAPTURES_DIR=/chemin/vers/le/dossier/des/captures #si besoin de changer le dossier des captures
-# THRESHOLD_DAY=100 #seuil de détection de mouvement de jour
-# THRESHOLD_NIGHT=2000 #seuil de détection de mouvement de nuit (souvent plus haut, bruit IR/faible lumière)
-# BRIGHTNESS_DAY_NIGHT_THRESHOLD=40 #luminosité moyenne (0-255) en dessous de laquelle c'est considéré comme la nuit
+# THRESHOLD_DAY=300 #seuil de détection de mouvement de jour
+# THRESHOLD_NIGHT=100 #seuil de nuit
+# BRIGHTNESS_DAY_NIGHT_THRESHOLD=60 #luminosité moyenne (0-255) en dessous de laquelle c'est considéré comme la nuit
+# (autres variables : voir le tableau "Variables d'environnement optionnelles")
 ## puis redémarrer le service systemd pour prendre en compte les nouvelles variables d'environnement si le service existe déjà
 # sudo systemctl daemon-reload && sudo systemctl restart homecamera
 ```
 
-Puis installer le service systemd :
+Puis installer les dépendances et le service systemd :
 
 ```
-sudo apt install ffmpeg -y
-sudo apt install python3-pip -y
+# Picamera2 (absent de la version Lite), OpenCV, numpy et ffmpeg viennent d'apt :
+# ce sont des paquets compilés pour l'OS, à ne pas installer via pip
+sudo apt install -y python3-picamera2 --no-install-recommends
+sudo apt install -y python3-opencv python3-venv ffmpeg
 cd /home/pi/homecamera
-# création du venv
-python3 -m venv venv
+# création du venv : --system-site-packages est OBLIGATOIRE (il donne accès à picamera2, libcamera, cv2, numpy)
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
 pip install -r requirements.txt
+# vérification (doit afficher OK) :
+python3 -c "from picamera2 import Picamera2; import cv2, numpy; print('OK')"
 sudo cp homecamera.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now homecamera
 # sudo systemctl start homecamera #si le now n'est pas dispo
 ```
+
+La caméra ne peut être ouverte que par un seul processus : tant que le service tourne, `rpicam-hello`, `rpicam-still`... échouent avec "device busy". Pour les utiliser : `sudo systemctl stop homecamera`, puis `sudo systemctl start homecamera` ensuite.
+
+### Variables d'environnement optionnelles
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `PING_TIME` | `07:30` | heure du ping quotidien (heure de Paris) |
+| `CAPTURES_DIR` | `captures` | dossier des captures et de l'outbox |
+| `THRESHOLD_DAY` | `300` | taille minimale (px de l'image 320x180) de la zone en mouvement, de jour |
+| `THRESHOLD_NIGHT` | `100` | idem de nuit (bruit IR / faible lumière : plus haut) |
+| `BRIGHTNESS_DAY_NIGHT_THRESHOLD` | `60` | luminosité moyenne (0-255) en dessous de laquelle c'est la nuit |
+| `MOTION_CONSECUTIVE_FRAMES` | `2` | nombre d'images consécutives en mouvement avant déclenchement (augmenter si faux positifs) |
+| `PIXEL_DIFF_THRESHOLD` | `25` | écart de niveau de gris pour qu'un pixel compte comme "en mouvement" |
+| `DETECTION_FPS` | `10` | fréquence d'analyse |
+| `PRE_ROLL_SECONDS` | `5` | secondes de vidéo conservées avant le déclenchement |
+| `MOTION_VIDEO_DURATION` | `30` | secondes enregistrées après le déclenchement |
+| `MANUAL_VIDEO_DURATION` | `30` | durée de `/video` |
+| `DELAY_AFTER_MOTION` | `5` | pause de détection après un clip |
+| `VIDEO_WIDTH` / `VIDEO_HEIGHT` | `1280` / `720` | résolution vidéo **et** photo (ex. 1920 / 1080 pour plus de détail) |
+| `VIDEO_FPS` / `VIDEO_BITRATE` | `20` / `2000000` | images par seconde, débit H.264 (bits/s) |
+| `CAMERA_ROTATE_180` | `1` | image retournée à 180° (caméra montée à l'envers) ; `0` pour désactiver |
+| `MOTION_SNAPSHOT_DRAW_BOX` | `1` | cadre rouge autour de la zone en mouvement sur la photo d'alerte |
+| `BACKGROUND_ALPHA` / `EXPOSURE_JUMP` | `0.03` / `15` | adaptation de l'image de référence / seuil de saut de luminosité globale |
+
+### Réglage de la détection
+
+Chaque activité proche du seuil est journalisée (`Activity level 872 (threshold 150, day)`) : `journalctl -u homecamera -f`.
+
+- trop de fausses alertes : monter `THRESHOLD_DAY`/`THRESHOLD_NIGHT` au-dessus des niveaux observés sans mouvement réel, ou `MOTION_CONSECUTIVE_FRAMES=3` ;
+- mouvements ratés (personne lointaine) : baisser le seuil ;
+- fausses alertes uniquement à la tombée de la nuit : ajuster `BRIGHTNESS_DAY_NIGHT_THRESHOLD` à la luminosité où la caméra bascule en infrarouge.
 
 ### Rétention des logs
 
