@@ -6,11 +6,11 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/telescopi
-EnvironmentFile=/home/pi/telescopi/.env
+User=${USER}
+WorkingDirectory=/home/${USER}/telescopi
+EnvironmentFile=/home/${USER}/telescopi/config/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/pi/telescopi/venv/bin/python3 /home/pi/telescopi/scr/telescopi/telescopi.py
+ExecStart=/home/${USER}/telescopi/venv/bin/python3 /home/${USER}/telescopi/src/telescopi/telescopi.py
 Restart=always
 RestartSec=5
 
