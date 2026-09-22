@@ -1,0 +1,2 @@
+python-telegram-bot[all]~=22.8
+opencv-python-headless>=4.9,<5

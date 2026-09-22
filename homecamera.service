@@ -1,0 +1,16 @@
+[Unit]
+Description=Homecamera Telegram security bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/homecamera
+EnvironmentFile=/home/pi/homecamera/.env
+ExecStart=/home/pi/homecamera/venv/bin/python3 /home/pi/homecamera/homecamera.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
