@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HomeCamera - Telegram security camera for Raspberry Pi (Picamera2 version).
+"""TeleScopi - Telegram security camera for Raspberry Pi (Picamera2 version).
 
 Architecture
 ------------
@@ -116,7 +116,7 @@ CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger("homecamera")
+logger = logging.getLogger("telescopi")
 
 # --- GLOBAL STATE ----------------------------------------------------------------------------
 is_active = True      # motion detection enabled by default

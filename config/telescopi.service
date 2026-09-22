@@ -1,5 +1,5 @@
 [Unit]
-Description=Homecamera Telegram security bot
+Description=TeleScoPi bot
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -7,10 +7,10 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/homecamera
-EnvironmentFile=/home/pi/homecamera/.env
+WorkingDirectory=/home/pi/telescopi
+EnvironmentFile=/home/pi/telescopi/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/pi/homecamera/venv/bin/python3 /home/pi/homecamera/homecamera.py
+ExecStart=/home/pi/telescopi/venv/bin/python3 /home/pi/telescopi/scr/telescopi/telescopi.py
 Restart=always
 RestartSec=5
 

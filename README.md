@@ -1,4 +1,4 @@
-# HomeCamera - Raspberry project
+# TeleScopi - Raspberry project
 
 Projet initial https://github.com/justdaniele/rpisecuritycamerabot modifié pour :
 
@@ -109,9 +109,9 @@ Pour que le script soit démarré automatiquement avec les bonnes informations, 
 Il faut d'abord créer le fichiers des variables d'environnement (ne jamais le mettre en dur dans le code) :
 
 ```
-touch /home/pi/homecamera/.env
-chmod 600 /home/pi/homecamera/.env
-chown pi:pi /home/pi/homecamera/.env
+touch /home/pi/telescopi/config/.env
+chmod 600 /home/pi/telescopi/config/.env
+chown pi:pi /home/pi/telescopi/config/.env
 ## éditer le fichier pour ajouter les variables d'environnement
 ## Exemple de contenu du fichier .env :
 # BOT_TOKEN=votre_token_ici
@@ -123,7 +123,7 @@ chown pi:pi /home/pi/homecamera/.env
 # BRIGHTNESS_DAY_NIGHT_THRESHOLD=60 #luminosité moyenne (0-255) en dessous de laquelle c'est considéré comme la nuit
 # (autres variables : voir le tableau "Variables d'environnement optionnelles")
 ## puis redémarrer le service systemd pour prendre en compte les nouvelles variables d'environnement si le service existe déjà
-# sudo systemctl daemon-reload && sudo systemctl restart homecamera
+# sudo systemctl daemon-reload && sudo systemctl restart telescopi
 ```
 
 Puis installer les dépendances et le service systemd :
@@ -133,20 +133,20 @@ Puis installer les dépendances et le service systemd :
 # ce sont des paquets compilés pour l'OS, à ne pas installer via pip
 sudo apt install -y python3-picamera2 --no-install-recommends
 sudo apt install -y python3-opencv python3-venv ffmpeg
-cd /home/pi/homecamera
+cd /home/pi/telescopi
 # création du venv : --system-site-packages est OBLIGATOIRE (il donne accès à picamera2, libcamera, cv2, numpy)
 python3 -m venv --system-site-packages venv
 source venv/bin/activate
 pip install -r requirements.txt
 # vérification (doit afficher OK) :
 python3 -c "from picamera2 import Picamera2; import cv2, numpy; print('OK')"
-sudo cp homecamera.service /etc/systemd/system/
+sudo cp config/telescopi.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now homecamera
-# sudo systemctl start homecamera #si le now n'est pas dispo
+sudo systemctl enable --now telescopi
+# sudo systemctl start telescopi #si le now n'est pas dispo
 ```
 
-La caméra ne peut être ouverte que par un seul processus : tant que le service tourne, `rpicam-hello`, `rpicam-still`... échouent avec "device busy". Pour les utiliser : `sudo systemctl stop homecamera`, puis `sudo systemctl start homecamera` ensuite.
+La caméra ne peut être ouverte que par un seul processus : tant que le service tourne, `rpicam-hello`, `rpicam-still`... échouent avec "device busy". Pour les utiliser : `sudo systemctl stop telescopi`, puis `sudo systemctl start telescopi` ensuite.
 
 ### Variables d'environnement optionnelles
 
@@ -172,7 +172,7 @@ La caméra ne peut être ouverte que par un seul processus : tant que le service
 
 ### Réglage de la détection
 
-Chaque activité proche du seuil est journalisée (`Activity level 872 (threshold 150, day)`) : `journalctl -u homecamera -f`.
+Chaque activité proche du seuil est journalisée (`Activity level 872 (threshold 150, day)`) : `journalctl -u telescopi -f`.
 
 - trop de fausses alertes : monter `THRESHOLD_DAY`/`THRESHOLD_NIGHT` au-dessus des niveaux observés sans mouvement réel, ou `MOTION_CONSECUTIVE_FRAMES=3` ;
 - mouvements ratés (personne lointaine) : baisser le seuil ;
@@ -186,13 +186,13 @@ Pour s'assurer que les logs du service sont stockés et que l'on ne garde des lo
 sudo mkdir -p /var/log/journal
 sudo systemd-tmpfiles --create --prefix /var/log/journal
 sudo mkdir -p /etc/systemd/journald.conf.d
-sudo nano /etc/systemd/journald.conf.d/homecamera-retention.conf  #y mettre le contenu ci-dessous
+sudo nano /etc/systemd/journald.conf.d/telescopi-retention.conf  #y mettre le contenu ci-dessous
 sudo systemctl restart systemd-journald
 sudo journalctl --flush
 sudo journalctl --rotate
 ```
 
-Contenu du fichier homecamera-retention.conf :
+Contenu du fichier telescopi-retention.conf :
 
 ```
 [Journal]
@@ -204,23 +204,23 @@ SystemMaxUse=200M
 Pour copier quotidiennement ces logs dans un répertoire plus facile d'accès :
 
 ```
-sudo mkdir -p /home/pi/homecamera/logs
+sudo mkdir -p /home/pi/telescopi/logs
 sudo crontab -e
-# 55 23 * * * journalctl -u homecamera --since "00:00" --until "23:59" > /home/pi/homecamera/logs/homecamera-$(date +\%F).log 2>&1 && find /home/pi/homecamera/logs -name "homecamera-*.log" -mtime +7 -delete
+# 55 23 * * * journalctl -u telescopi --since "00:00" --until "23:59" > /home/pi/telescopi/logs/telescopi-$(date +\%F).log 2>&1 && find /home/pi/telescopi/logs -name "telescopi-*.log" -mtime +7 -delete
 ```
 
 Pour parcourir les logs stockés du service :
 
 ```
-# Tous les logs du service homecamera
-journalctl -u homecamera
+# Tous les logs du service telescopi
+journalctl -u telescopi
 
 # Suivre en direct (comme tail -f)
-journalctl -u homecamera -f
+journalctl -u telescopi -f
 
 # Les 50 dernières lignes
-journalctl -u homecamera -n 50
+journalctl -u telescopi -n 50
 
 # Depuis le dernier démarrage du service
-journalctl -u homecamera -b
+journalctl -u telescopi -b
 ```
