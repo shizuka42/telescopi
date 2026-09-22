@@ -1,0 +1,2 @@
+# telescopi
+TeleScoPi
