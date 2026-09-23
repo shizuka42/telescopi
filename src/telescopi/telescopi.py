@@ -3,7 +3,9 @@
 
 Architecture
 ------------
-* Two interchangeable camera backends, selected via the CAMERA_BACKEND env var:
+* Two interchangeable camera backends, controlled by PICAM_ENABLED / USB_CAM_ENABLED (either or
+  both can be true). When both are enabled, DEFAULT_CAMERA picks which one is active at startup,
+  and the /switch_camera Telegram command switches to the other one at runtime:
     - "picam" (default): ONE Picamera2 pipeline stays open all the time, with a hardware H.264
       encoder feeding a circular buffer, plus a "lores" YUV stream read ~DETECTION_FPS times/s
       for motion analysis.
@@ -34,12 +36,12 @@ from datetime import datetime, time as dt_time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-os.environ.setdefault("LIBCAMERA_LOG_LEVELS", "*:WARN")  # must be set before importing picamera2 (CAMERA_BACKEND=picam only)
+os.environ.setdefault("LIBCAMERA_LOG_LEVELS", "*:WARN")  # must be set before importing picamera2 (only matters if PICAM_ENABLED)
 
 import cv2
 import numpy as np
 # picamera2/libcamera are only imported inside PiCameraService, so this file also runs on a
-# plain machine with just a USB webcam and no Pi camera stack installed (CAMERA_BACKEND=usb).
+# plain machine with just a USB webcam and no Pi camera stack installed (PICAM_ENABLED=false).
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import (
@@ -78,10 +80,23 @@ VIDEO_FPS = _env_int("VIDEO_FPS", 20)
 VIDEO_BITRATE = _env_int("VIDEO_BITRATE", 2_000_000)
 CAMERA_ROTATE_180 = _env_bool("CAMERA_ROTATE_180", True)  # camera mounted upside down (old --hflip --vflip)
 
-# Camera backend: "picam" = Pi NoIR/HQ camera module via Picamera2 (default), "usb" = USB webcam via OpenCV/V4L2.
-CAMERA_BACKEND = os.environ.get("CAMERA_BACKEND", "picam").strip().lower()
-if CAMERA_BACKEND not in ("picam", "usb"):
-    raise SystemExit(f"Invalid CAMERA_BACKEND={CAMERA_BACKEND!r}: expected 'picam' or 'usb'")
+# Which camera(s) are physically connected. At least one must be enabled.
+PICAM_ENABLED = _env_bool("PICAM_ENABLED", True)
+USB_CAM_ENABLED = _env_bool("USB_CAM_ENABLED", False)
+if not PICAM_ENABLED and not USB_CAM_ENABLED:
+    raise SystemExit("At least one of PICAM_ENABLED or USB_CAM_ENABLED must be true")
+BOTH_CAMERAS_ENABLED = PICAM_ENABLED and USB_CAM_ENABLED
+
+# Camera used at startup. Only meaningful (and required) when both cameras are enabled; otherwise
+# it's forced to whichever single camera is enabled. The bot always comes back up on this camera
+# after a restart - /switch_camera only changes the camera for the current run.
+if BOTH_CAMERAS_ENABLED:
+    DEFAULT_CAMERA = os.environ.get("DEFAULT_CAMERA", "picam").strip().lower()
+    if DEFAULT_CAMERA not in ("picam", "usb"):
+        raise SystemExit(f"Invalid DEFAULT_CAMERA={DEFAULT_CAMERA!r}: expected 'picam' or 'usb'")
+else:
+    DEFAULT_CAMERA = "picam" if PICAM_ENABLED else "usb"
+
 # USB webcam only. WEBCAM_DEVICE accepts a V4L2 path ("/dev/video0") or a numeric index ("0").
 # Defaults suit a Logitech C310, which natively does MJPG at 1280x720/30fps (YUYV is much slower).
 WEBCAM_DEVICE = os.environ.get("WEBCAM_DEVICE", "0")
@@ -159,7 +174,7 @@ def _silence_c_library_stderr() -> None:
     os.close(devnull_fd)
 
 
-if CAMERA_BACKEND == "usb":
+if USB_CAM_ENABLED:
     _silence_c_library_stderr()
 
 # --- GLOBAL STATE ----------------------------------------------------------------------------
@@ -170,6 +185,9 @@ recorder = None       # Recorder
 detector = None       # MotionDetector
 outbox = None         # Outbox
 recording_lock = None  # asyncio.Lock: only one clip at a time (one circular output)
+camera_switch_lock = None    # asyncio.Lock: only one /switch_camera at a time
+current_camera_backend = None  # "picam" or "usb": whichever camera is active right now
+event_loop = None             # asyncio event loop, needed to (re)build a MotionDetector on switch
 
 
 def hard_exit(reason: str) -> None:
@@ -222,7 +240,7 @@ class PiCameraService(CameraService):
     """Owns the Picamera2 pipeline: hardware H.264 -> circular buffer, plus a lores stream for analysis."""
 
     def __init__(self):
-        # Imported here (not at module level) so this file also runs with CAMERA_BACKEND=usb on a
+        # Imported here (not at module level) so this file also runs with PICAM_ENABLED=false on a
         # machine without the Pi camera stack installed.
         from libcamera import Transform
         from picamera2 import Picamera2
@@ -513,11 +531,13 @@ class WebcamRecorder:
         self._process = None
 
 
-def build_camera_service() -> CameraService:
-    """Picks the camera backend to use, based on the CAMERA_BACKEND env var."""
-    if CAMERA_BACKEND == "usb":
+def build_camera_service(backend: str) -> CameraService:
+    """Builds a fresh camera service for the given backend ("picam" or "usb")."""
+    if backend == "usb":
         return WebcamCameraService()
-    return PiCameraService()
+    if backend == "picam":
+        return PiCameraService()
+    raise ValueError(f"Unknown camera backend {backend!r}")
 
 
 def wrap_h264_to_mp4(raw: Path, mp4: Path) -> bool:
@@ -632,6 +652,11 @@ class MotionDetector(threading.Thread):
         self.busy = False          # a motion clip is being handled
         self.resume_at = 0.0       # monotonic time before which detection stays paused
         self.last_frame_at = time.monotonic()
+        self._stop_event = threading.Event()  # set by stop(), e.g. when switching camera
+
+    def stop(self) -> None:
+        """Asks the detection loop to exit; the thread still needs join()ing afterwards."""
+        self._stop_event.set()
 
     def release(self, cooldown: float) -> None:
         self.resume_at = time.monotonic() + cooldown
@@ -648,7 +673,7 @@ class MotionDetector(threading.Thread):
         period = 1.0 / DETECTION_FPS
         errors = 0
         logger.info("Monitoring system initialized...")
-        while True:
+        while not self._stop_event.is_set():
             started = time.monotonic()
             try:
                 gray = self._camera.grab_gray()  # always read: doubles as camera health heartbeat
@@ -669,6 +694,7 @@ class MotionDetector(threading.Thread):
             remaining = period - (time.monotonic() - started)
             if remaining > 0:
                 time.sleep(remaining)
+        logger.info("Motion detector thread stopped")
 
     def _trigger(self, result: MotionResult) -> None:
         logger.info("*** MOTION TRIGGERED *** area=%.0f", result.area)
@@ -680,30 +706,46 @@ class MotionDetector(threading.Thread):
             raise
 
 
-def _watchdog(det: MotionDetector) -> None:
-    """Watchdog thread that ensures the camera is providing frames regularly."""
+def _watchdog() -> None:
+    """Watchdog thread that ensures the camera is providing frames regularly.
+
+    Reads the `detector` global on every tick (rather than taking a fixed reference) so that it
+    keeps watching whichever detector is current after a /switch_camera.
+    """
     while True:
         time.sleep(10)
-        if time.monotonic() - det.last_frame_at > WATCHDOG_TIMEOUT_SECONDS:
+        det = detector
+        if det is not None and time.monotonic() - det.last_frame_at > WATCHDOG_TIMEOUT_SECONDS:
             hard_exit(f"No camera frame for {WATCHDOG_TIMEOUT_SECONDS}s")
 
 
 # --- TELEGRAM DELIVERY (persistent outbox) ---------------------------------------------------
+def _camera_label(backend: str) -> str:
+    return {"picam": "📷 Pi Camera", "usb": "🎥 USB Webcam"}.get(backend, backend)
+
+
+def _other_backend(backend: str) -> str:
+    return "usb" if backend == "picam" else "picam"
+
+
 def get_main_keyboard():
     """Generates the inline keyboard for bot control."""
     motion_text = "🔴 Stop Motion" if is_active else "🟢 Start Motion"
     motion_callback = "stop_motion" if is_active else "start_motion"
-    return InlineKeyboardMarkup([
+    rows = [
         [
             InlineKeyboardButton("📸 Photo", callback_data="take_photo"),
             InlineKeyboardButton("📹 Video", callback_data="take_video"),
         ],
         [InlineKeyboardButton(motion_text, callback_data=motion_callback)],
-        [
-            InlineKeyboardButton("ℹ️ Status", callback_data="show_status"),
-            InlineKeyboardButton("❓ Help", callback_data="show_help"),
-        ],
+    ]
+    if BOTH_CAMERAS_ENABLED:
+        rows.append([InlineKeyboardButton("🔀 Switch Camera", callback_data="switch_camera")])
+    rows.append([
+        InlineKeyboardButton("ℹ️ Status", callback_data="show_status"),
+        InlineKeyboardButton("❓ Help", callback_data="show_help"),
     ])
+    return InlineKeyboardMarkup(rows)
 
 
 async def _call_with_retry(coro_func, log_label):
@@ -933,7 +975,8 @@ async def cmd_help_impl(bot, chat_id):
         f"📹 `/video` - Record {MANUAL_VIDEO_DURATION}s video (plus the {PRE_ROLL_SECONDS}s before)\n"
         "🟢 `/start_motion` - Enable motion detection\n"
         "🔴 `/stop_motion` - Disable motion detection\n"
-        "ℹ️ `/status` - System status\n\n"
+        + ("🔀 `/switch_camera` - Switch to the other camera\n" if BOTH_CAMERAS_ENABLED else "")
+        + "ℹ️ `/status` - System status\n\n"
         "Current Status: " + ("✅ Active Monitoring" if is_active else "❌ System Off")
     )
     await bot.send_message(chat_id, help_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
@@ -1034,6 +1077,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif data == "show_status":
         await query.answer()
         await cmd_status_impl(context.bot, chat_id)
+    elif data == "switch_camera":
+        await query.answer()
+        await cmd_switch_camera_impl(context.application, chat_id)
     else:
         await query.answer()
 
@@ -1066,6 +1112,82 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await cmd_status_impl(context.bot, update.effective_chat.id)
 
 
+async def cmd_switch_camera(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_switch_camera_impl(context.application, update.effective_chat.id)
+
+
+def _switch_camera_sync(old_camera: CameraService, old_detector: MotionDetector, new_backend: str, application: Application):
+    """Blocking part of a camera switch: runs off the event loop (see cmd_switch_camera_impl)."""
+    old_detector.stop()
+    old_detector.join(timeout=5)
+    old_camera.stop()
+
+    new_camera = build_camera_service(new_backend)
+    new_camera.start()
+    new_detector = MotionDetector(new_camera, event_loop, lambda result: handle_motion(application, result))
+    new_detector.start()
+    return new_camera, new_detector
+
+
+async def cmd_switch_camera_impl(application: Application, chat_id: int) -> None:
+    """Switches to the other camera. Refuses while a recording (manual or motion) is in progress."""
+    global camera, recorder, detector, current_camera_backend
+    bot = application.bot
+
+    if not BOTH_CAMERAS_ENABLED:
+        await bot.send_message(
+            chat_id, "Une seule caméra est configurée (PICAM_ENABLED / USB_CAM_ENABLED) : impossible de basculer.",
+            reply_markup=get_main_keyboard(),
+        )
+        return
+
+    def _busy() -> bool:
+        # detector.busy is set the instant motion triggers, slightly before recording_lock is
+        # actually acquired on the event loop, so checking both closes that small race window.
+        return recording_lock.locked() or (detector is not None and detector.busy)
+
+    if _busy():
+        await bot.send_message(
+            chat_id, "⚠️ Un enregistrement est en cours, réessaie une fois qu'il sera terminé.",
+            reply_markup=get_main_keyboard(),
+        )
+        return
+
+    async with camera_switch_lock:
+        if _busy():  # re-check: a recording may have started while we were waiting for this lock
+            await bot.send_message(
+                chat_id, "⚠️ Un enregistrement est en cours, réessaie une fois qu'il sera terminé.",
+                reply_markup=get_main_keyboard(),
+            )
+            return
+
+        new_backend = _other_backend(current_camera_backend)
+        status = await bot.send_message(chat_id, f"🔄 Bascule vers {_camera_label(new_backend)}...")
+        loop = asyncio.get_running_loop()
+        try:
+            new_camera, new_detector = await loop.run_in_executor(
+                None, _switch_camera_sync, camera, detector, new_backend, application
+            )
+        except Exception as exc:
+            logger.exception("Camera switch failed")
+            try:
+                await status.edit_text(f"❌ Échec du changement de caméra : {exc}")
+            except BadRequest:
+                pass
+            await bot.send_message(chat_id, "La caméra précédente reste active.", reply_markup=get_main_keyboard())
+            return
+
+        camera, detector = new_camera, new_detector
+        recorder = camera.create_recorder()
+        current_camera_backend = new_backend
+        logger.info("Camera switched to %s", current_camera_backend)
+        try:
+            await status.edit_text(f"✅ Caméra active : {_camera_label(new_backend)}")
+        except BadRequest:
+            pass
+        await bot.send_message(chat_id, f"📷 Caméra active : {_camera_label(new_backend)}", reply_markup=get_main_keyboard())
+
+
 def build_status_message(startup: bool = False) -> str:
     """Builds the status text shared by the daily ping, /status and the startup notification."""
     status = "Motion detector On" if is_active else "Motion detector Off"
@@ -1081,7 +1203,7 @@ def build_status_message(startup: bool = False) -> str:
     message = (
         f"{header}\n"
         f"Status: {status}\n"
-        f"📷 Camera: {camera_status} ({CAMERA_BACKEND})\n"
+        f"📷 Camera: {camera_status} ({_camera_label(current_camera_backend)})\n"
         f"💡 Lighting detected: {lighting_status}\n"
         f"🕒 Running since: {START_TIME.strftime('%Y-%m-%d %H:%M:%S %Z')} (uptime: {days}d {hours}h {minutes}m)"
     )
@@ -1106,15 +1228,16 @@ async def retry_pending_uploads(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def post_init(telegram_app: Application) -> None:
     """Post-initializes the bot : sends orphans, inits motion detector, and enables job queues."""
-    global recording_lock, detector
+    global recording_lock, camera_switch_lock, detector, event_loop
     recording_lock = asyncio.Lock()
-    loop = asyncio.get_running_loop()
+    camera_switch_lock = asyncio.Lock()
+    event_loop = asyncio.get_running_loop()
 
     outbox.adopt_orphans(("motion_*.mp4", "manual_*.mp4", "snap_*.jpg", "alert_*.jpg"), ALLOWED_USER_IDS)
 
-    detector = MotionDetector(camera, loop, lambda result: handle_motion(telegram_app, result))
+    detector = MotionDetector(camera, event_loop, lambda result: handle_motion(telegram_app, result))
     detector.start()
-    threading.Thread(target=_watchdog, args=(detector,), name="watchdog", daemon=True).start()
+    threading.Thread(target=_watchdog, name="watchdog", daemon=True).start()
 
     telegram_app.job_queue.run_daily(daily_ping, time=PING_TIME, name="daily_ping")
     telegram_app.job_queue.run_repeating(
@@ -1134,9 +1257,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def main() -> None:
-    global camera, recorder, outbox
-    logger.info("Camera backend: %s", CAMERA_BACKEND)
-    camera = build_camera_service()
+    global camera, recorder, outbox, current_camera_backend
+    current_camera_backend = DEFAULT_CAMERA
+    logger.info(
+        "Camera backend at startup: %s (PICAM_ENABLED=%s, USB_CAM_ENABLED=%s)",
+        current_camera_backend, PICAM_ENABLED, USB_CAM_ENABLED,
+    )
+    camera = build_camera_service(current_camera_backend)
     camera.start()  # fails fast (and systemd restarts us) if the camera is unavailable
     recorder = camera.create_recorder()
     outbox = Outbox(CAPTURES_DIR / "outbox")
@@ -1152,10 +1279,12 @@ def main() -> None:
     telegram_app.add_handler(CommandHandler("photo", cmd_photo, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("video", cmd_video, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("status", cmd_status, filters=allowed_users_filter))
+    if BOTH_CAMERAS_ENABLED:
+        telegram_app.add_handler(CommandHandler("switch_camera", cmd_switch_camera, filters=allowed_users_filter))
     telegram_app.add_handler(CallbackQueryHandler(handle_callbacks))
     telegram_app.add_error_handler(error_handler)
 
-    logger.info("Security Bot is Online (%s camera, buttons enabled).", CAMERA_BACKEND)
+    logger.info("Security Bot is Online (%s camera, buttons enabled).", current_camera_backend)
     # bootstrap_retries=-1: retry indefinitely if wifi is down when the process starts.
     telegram_app.run_polling(bootstrap_retries=-1)
 

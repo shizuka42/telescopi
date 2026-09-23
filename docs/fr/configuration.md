@@ -17,7 +17,9 @@ Pour modifier une variable, il faut éditer `~/telescopi/config/.env` en ajoutan
 |---|---|---|---|
 | `BOT_TOKEN` | *(aucun, obligatoire)* | jeton d'authentification du bot Telegram, obtenu auprès de [@BotFather](https://t.me/BotFather) | chaîne de caractères fournie par BotFather, ex. `BOT_TOKEN=123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `ALLOWED_USER_IDS` | *(aucun, obligatoire)* | identifiants Telegram des utilisateurs autorisés à piloter le bot ; toute personne hors de cette liste est ignorée | un ou plusieurs identifiants numériques séparés par des virgules, sans espace, ex. `ALLOWED_USER_IDS=111111111,222222222` |
-| `CAMERA_BACKEND` | `picam` | Définition du type de caméra à utiliser (module caméra de Raspberry Pi ou caméra USB) | `picam` ou `usb` |
+| `PICAM_ENABLED` | `true` | Caméra Pi branchée ou non | booléen : `1`/`true`/`yes`/`on` pour activer, `0`/`false`/`no`/`off` pour désactiver |
+| `USB_CAM_ENABLED` | `true` | Caméra USB branchée ou non | booléen : `1`/`true`/`yes`/`on` pour activer, `0`/`false`/`no`/`off` pour désactiver |
+| `DEFAULT_CAMERA` | `picam` | Caméra par défaut dans le cas où PICAM_ENABLED=true et USB_CAM_ENABLED=true | `picam` ou `usb` |
 
 ## Variables d'environnement optionnelles
 
