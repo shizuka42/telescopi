@@ -1,3 +1,8 @@
+#### (Choose your language / Choisissez votre langue)
+
+[![Language-English](https://img.shields.io/badge/Language-English-blue)](../en/implementation.md)
+[![Language-Français](https://img.shields.io/badge/Langue-Fran%C3%A7ais-green)](../fr/implementation.md)
+
 # Informations sur l'implémentation de TeleScopi
 
 - Une seule pipeline Picamera2 reste ouverte en permanence :

@@ -1,3 +1,8 @@
+#### (Choose your language / Choisissez votre langue)
+
+[![Language-English](https://img.shields.io/badge/Language-English-blue)](../en/utilisation.md)
+[![Language-Français](https://img.shields.io/badge/Langue-Fran%C3%A7ais-green)](../fr/utilisation.md)
+
 # Utilisation de TeleScoPi
 
 Pour utiliser TeleScoPi, assurez-vous d'avoir correctement installé et configuré le service comme décrit dans la [documentation d'installation](./installation.md) et la [documentation de configuration](./configuration.md).

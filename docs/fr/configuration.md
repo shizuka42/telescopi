@@ -1,3 +1,8 @@
+#### (Choose your language / Choisissez votre langue)
+
+[![Language-English](https://img.shields.io/badge/Language-English-blue)](../en/configuration.md)
+[![Language-Français](https://img.shields.io/badge/Langue-Fran%C3%A7ais-green)](../fr/configuration.md)
+
 # Configuration de TeleScoPi
 
 Toute la configuration de TeleScoPi passe par des variables d'environnement, lues au démarrage du processus `telescopi.py` depuis le fichier `~/telescopi/config/.env` (chargé par le service telescopi).

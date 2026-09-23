@@ -1,3 +1,8 @@
+#### (Choose your language / Choisissez votre langue)
+
+[![Language-English](https://img.shields.io/badge/Language-English-blue)](../en/installation.md)
+[![Language-Français](https://img.shields.io/badge/Langue-Fran%C3%A7ais-green)](../fr/installation.md)
+
 # Installation de TeleScoPi
 
 Ce guide explique comment installer TeleScoPi sur un Raspberry Pi. Il couvre la préparation du matériel, l'installation du système d'exploitation, la configuration du réseau et l'installation des dépendances nécessaires pour faire fonctionner le projet.
@@ -48,7 +53,7 @@ Après avoir flashé et inséré la carte microSD dans le Raspberry Pi, procéde
 
 Une connexion internet est nécessaire pour que le projet puisse communiquer avec Telegram et envoyer des notifications. Il faut donc configurer le Raspberry Pi pour qu'il soit connecté à internet, soit via Ethernet, soit via Wi-Fi et qu'il conserve ses authentifications (à configurer lors de l'installation de l'OS Raspberry Pi).
 
-**Si votre réseau wifi local est configuré avec une restriction par liste blanche d'adresse MAC, il faut que le raspberry pi utilise toujours la même adresse.** Si votre réseau local n'a pas de restriction par liste blanche d'adresse MAC, cette étape peut être ignorée.
+**Si votre réseau wifi local est configuré avec une restriction par liste blanche d'adresse MAC, il faut que le raspberry pi utilise toujours la même adresse MAC.** Si votre réseau local n'a pas de restriction par liste blanche d'adresse MAC, cette étape peut être ignorée.
 Pour cela il faut d'abord connaitre son adresse MAC, donc il va falloir désactiver cette limitation sur votre réseau lors de cette initialisation, pour que le raspberry puisse se connecter une première fois, avant de pouvoir la réactiver ensuite.
 
 1. Désactiver temporairement la restriction par liste blanche d'adresse MAC sur votre réseau Wi-Fi.
