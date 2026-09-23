@@ -17,6 +17,7 @@ Pour modifier une variable, il faut éditer `~/telescopi/config/.env` en ajoutan
 |---|---|---|---|
 | `BOT_TOKEN` | *(aucun, obligatoire)* | jeton d'authentification du bot Telegram, obtenu auprès de [@BotFather](https://t.me/BotFather) | chaîne de caractères fournie par BotFather, ex. `BOT_TOKEN=123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `ALLOWED_USER_IDS` | *(aucun, obligatoire)* | identifiants Telegram des utilisateurs autorisés à piloter le bot ; toute personne hors de cette liste est ignorée | un ou plusieurs identifiants numériques séparés par des virgules, sans espace, ex. `ALLOWED_USER_IDS=111111111,222222222` |
+| `CAMERA_BACKEND` | `picam` | Définition du type de caméra à utiliser (module caméra de Raspberry Pi ou caméra USB) | `picam` ou `usb` |
 
 ## Variables d'environnement optionnelles
 
@@ -29,6 +30,13 @@ Pour modifier une variable, il faut éditer `~/telescopi/config/.env` en ajoutan
 | `VIDEO_FPS` | `20` | nombre d'images par seconde de la vidéo enregistrée | entier positif, ex. `VIDEO_FPS=25` |
 | `VIDEO_BITRATE` | `2000000` | débit de l'encodage H.264, en bits/seconde | entier positif, ex. `VIDEO_BITRATE=4000000` |
 | `CAMERA_ROTATE_180` | `1` (activé) | retourne l'image à 180° (caméra montée à l'envers) | booléen : `1`/`true`/`yes`/`on` pour activer, `0`/`false`/`no`/`off` pour désactiver |
+
+### Réglage vidéo pour caméra USB
+
+| Variable | Défaut | Rôle | Comment la remplir |
+|---|---|---|---|
+| `WEBCAM_DEVICE` | `0` | Chemin V4L2 de la caméra de préférence par id (exemple `/dev/v4l/by-id/abc-video0`) ou index numérique de la caméra | ex. `WEBCAM_DEVICE=/dev/v4l/by-id/abc-video0` |
+| `WEBCAM_FOURCC` | `MJPG` | Codec vidéo ? | `MJPG` ou `YUYV` |
 
 ### Détection de mouvement
 

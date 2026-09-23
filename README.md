@@ -11,6 +11,8 @@
 
 TeleScopi is a Python **home surveillance** project that uses a camera connected to a Raspberry Pi and can be controlled remotely via Telegram. It detects motion, notifies authorized users, and allows them to request photos or videos on demand.
 
+The project can be used with a Raspberry Pi camera module or a USB webcam.
+
 ## Features
 
 ### Main Features
@@ -39,6 +41,7 @@ This project has been tested with:
 
 - Raspberry Pi 3 model B [link](https://www.raspberrypi.com/products/raspberry-pi-3-model-b/)
 - Raspberry Pi Camera Module v2 NoIR [link](https://www.raspberrypi.com/products/pi-noir-camera-v2/)
+- a USB webcam (e.g., Logitech C310)
 - Raspberry Pi OS Lite (64-bit)
 - Carte microSD 32 Go, classe 10
 

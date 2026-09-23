@@ -55,9 +55,18 @@ while true; do
     esac
 done
 
+read -r -s -p "Camera settings : picam or usb ? " A_CAMERA_TYPE
+echo
+while [[ "${A_CAMERA_TYPE}" != "picam" && "${A_CAMERA_TYPE}" != "usb" ]]; do
+    echo "Invalid camera type. Please enter 'picam' or 'usb'."
+    read -r -s -p "Camera settings : picam or usb ? " A_CAMERA_TYPE
+    echo
+done
+
 cat > "${HOME}"/telescopi/config/.env <<EOF
 BOT_TOKEN=${A_BOT_TOKEN}
 ALLOWED_USER_IDS=${A_CHAT_IDS}
+CAMERA_BACKEND=${A_CAMERA_TYPE}
 EOF
 
 chmod 600 "${HOME}"/telescopi/config/.env

@@ -12,7 +12,7 @@ Ce guide explique comment installer TeleScoPi sur un Raspberry Pi. Il couvre la 
 Avant de commencer l'installation, assurez-vous de disposer du matériel et des logiciels suivants :
 
 - Un Raspberry Pi (3B ou plus récent)
-- Un module caméra compatible avec le Raspberry Pi (Camera Module v1/v2/v3 ou HQ Camera)
+- Un module caméra compatible avec le Raspberry Pi (Camera Module v1/v2/v3 ou HQ Camera) ou une webcam branchée en USB sur le Raspberry Pi
 - Une carte microSD (16 Go minimum, 32 Go conseillé, classe 10 / A1)
 - Une alimentation micro-USB 5V/2.5A pour le Raspberry Pi
 - Un ordinateur (Windows/Mac/Linux) avec un lecteur de carte SD, pour préparer la carte
@@ -39,15 +39,14 @@ Après avoir flashé et inséré la carte microSD dans le Raspberry Pi, procéde
 
 1. Insérez la carte microSD dans le Raspberry Pi et connectez l'alimentation.
 2. Connectez-vous au Raspberry Pi via SSH sur votre réseau local : `ssh pi@homepi.local`.
-3. Faire les mises à jour du système en exécutant les commandes suivantes :
+3. Créez un répertoire pour le projet TeleScoPi sur le Raspberry Pi : `mkdir -p ~/telescopi`
+4. Faire les mises à jour du système en exécutant les commandes suivantes :
    ```bash
    sudo apt update
    sudo apt upgrade -y
    sudo apt full-upgrade -y
    ```
-4. Redémarrez le Raspberry Pi pour appliquer les mises à jour : `sudo reboot`
-5. Après le redémarrage, reconnectez-vous au Raspberry Pi via SSH et vérifiez que la caméra est détectée correctement : `rpicam-hello --list-cameras` (doit afficher `imx219` pour la Camera Module v2). Si rien n'apparaît, vérifier le branchement du câble ruban (Pi éteint).
-6. Créez un répertoire pour le projet TeleScoPi sur le Raspberry Pi : `mkdir -p ~/telescopi`
+5. Redémarrez le Raspberry Pi pour appliquer les mises à jour : `sudo reboot`
 
 ### Configuration du réseau Wi-Fi
 
@@ -80,6 +79,22 @@ Si la création de bot sur Telegram évolue, veuillez vous référer à la docum
 1. Créez un bot sur Telegram en interrogeant le BotFather : `@BotFather` et suivez ses instructions pour créer un nouveau bot (commande `/newbot`).
 2. Notez le token d'accès fourni par le BotFather après la création du bot. Vous en aurez besoin pour configurer le bot sur le Raspberry Pi.
 3. Interrogez le bot `@userinfobot` pour obtenir votre identifiant utilisateur Telegram. Vous en aurez besoin pour configurer le bot sur le Raspberry Pi.
+
+### Vérification de la caméra
+
+Il faut vérifier que la caméra que vous avez choisi est bien identifiée.
+
+#### Caméra Module Pi
+
+1. Connectez-vous au Raspberry Pi via SSH sur votre réseau local : `ssh pi@homepi.local`.
+2. Vérifiez que la caméra est détectée correctement : `rpicam-hello --list-cameras` (doit afficher `imx219` pour la Camera Module v2). Si rien n'apparaît, vérifier le branchement du câble ruban (Pi éteint).
+
+#### Caméra webcam USB
+
+1. Connectez-vous au Raspberry Pi via SSH sur votre réseau local : `ssh pi@homepi.local`.
+2. Vérifiez que votre caméra USB apparait sur les ports USB via `lsusb`.
+3. Identifier le chemin v4l2 de votre caméra en analysant le retour de `v4l2-ctl --list-devices` (par exemple : une webcam Logitech apparait sous le nom "UVC Camera") et noter le premier chemin du device (par exemple "/dev/video1").
+4. Identifie le symlink lié à ce chemin dans `/dev/v4l/by-id` grâce à `ls -l /dev/v4l/by-id/` car le chemin par id ne changera pas après un reboot.
 
 ## Installation de TeleScoPi
 
