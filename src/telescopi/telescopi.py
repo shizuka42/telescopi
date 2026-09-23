@@ -549,9 +549,9 @@ async def notify_all(bot, text: str) -> str:
 
 
 # --- MOTION HANDLING -------------------------------------------------------------------------
-async def send_motion_alert(bot, bbox, detected_at: datetime) -> None:
+async def send_motion_alert(bot, bbox, area, threshold, detected_at: datetime) -> None:
     """Snapshot of the triggering moment, sent right away while the clip is still recording."""
-    caption = f"🚨 Motion Detected! ({detected_at:%H:%M:%S}) Recording..."
+    caption = f"🚨 Motion Detected! ({detected_at:%H:%M:%S}, {area}/{threshold} ) Recording..."
     loop = asyncio.get_running_loop()
     path = CAPTURES_DIR / f"alert_{int(detected_at.timestamp() * 1000)}.jpg"
     try:
@@ -588,7 +588,7 @@ async def handle_motion(telegram_app: Application, result: MotionResult) -> None
             recorder.start(raw)  # instant: the pre-roll already sits in the circular buffer
             is_recording = True
             try:
-                telegram_app.create_task(send_motion_alert(telegram_app.bot, result.bbox, detected_at))
+                telegram_app.create_task(send_motion_alert(telegram_app.bot, result.bbox, result.area, result.threshold, detected_at))
                 await asyncio.sleep(MOTION_VIDEO_DURATION)
             finally:
                 recorder.stop()
