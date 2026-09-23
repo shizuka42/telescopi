@@ -266,7 +266,15 @@ class MotionAnalyzer:
             return None
 
         background = cv2.convertScaleAbs(self._background)
-        if abs(brightness - float(background.mean())) > EXPOSURE_JUMP:
+        current_exposure_gap = abs(brightness - float(background.mean()))
+        if current_exposure_gap > 2*EXPOSURE_JUMP:
+            # Large exposure gap => report as motion
+            logger.info("Global brightness jump (%.1f -> %.1f), reported as full-frame motion", background.mean(), brightness)
+            self._background = blurred.astype(np.float32)
+            self._hits = 0
+            height, width = gray.shape[:2]
+            return MotionResult(float(width * height), (0, 0, width, height), threshold, self.is_day)
+        if current_exposure_gap > EXPOSURE_JUMP:
             # Auto-exposure / IR-cut switch / lights: the whole image changed, not a moving object.
             logger.info("Global brightness jump (%.1f -> %.1f), reference reset", background.mean(), brightness)
             self._background = blurred.astype(np.float32)
