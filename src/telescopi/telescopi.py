@@ -319,6 +319,10 @@ class MotionDetector(threading.Thread):
     def camera_ok(self) -> bool:
         return time.monotonic() - self.last_frame_at < 15
 
+    def lighting_status(self):
+        """Current day/night reading of the analyzer: True (day), False (night), None (not established yet)."""
+        return self._analyzer.is_day
+
     def run(self) -> None:
         period = 1.0 / DETECTION_FPS
         errors = 0
@@ -374,7 +378,10 @@ def get_main_keyboard():
             InlineKeyboardButton("📹 Video", callback_data="take_video"),
         ],
         [InlineKeyboardButton(motion_text, callback_data=motion_callback)],
-        [InlineKeyboardButton("❓ Help", callback_data="show_help")],
+        [
+            InlineKeyboardButton("ℹ️ Status", callback_data="show_status"),
+            InlineKeyboardButton("❓ Help", callback_data="show_help"),
+        ],
     ])
 
 
@@ -599,15 +606,20 @@ async def handle_motion(telegram_app: Application, result: MotionResult) -> None
 # --- SHARED COMMAND IMPLEMENTATIONS (used by both /commands and inline buttons) --------------
 async def cmd_help_impl(bot, chat_id):
     help_text = (
-        "🛠 *Security Bot Control Panel*\n\n"
+        "🛠 *TeleScoPi Bot Control Panel*\n\n"
         "Use the buttons below or the commands:\n"
         "📸 `/photo` - Take a photo\n"
         f"📹 `/video` - Record {MANUAL_VIDEO_DURATION}s video (plus the {PRE_ROLL_SECONDS}s before)\n"
         "🟢 `/start_motion` - Enable motion detection\n"
-        "🔴 `/stop_motion` - Disable motion detection\n\n"
+        "🔴 `/stop_motion` - Disable motion detection\n"
+        "ℹ️ `/status` - System status\n\n"
         "Current Status: " + ("✅ Active Monitoring" if is_active else "❌ System Off")
     )
     await bot.send_message(chat_id, help_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+
+
+async def cmd_status_impl(bot, chat_id):
+    await bot.send_message(chat_id, build_status_message(), reply_markup=get_main_keyboard())
 
 
 async def cmd_photo_impl(bot, chat_id):
@@ -698,6 +710,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif data == "show_help":
         await query.answer()
         await cmd_help_impl(context.bot, chat_id)
+    elif data == "show_status":
+        await query.answer()
+        await cmd_status_impl(context.bot, chat_id)
     else:
         await query.answer()
 
@@ -726,18 +741,35 @@ async def cmd_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await cmd_video_impl(context.bot, update.effective_chat.id)
 
 
-async def daily_ping(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Confirms the bot is alive; a missed ping signals a prolonged outage."""
-    status = "Active Monitoring" if is_active else "System Off"
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_status_impl(context.bot, update.effective_chat.id)
+
+
+def build_status_message(startup: bool = False) -> str:
+    """Builds the status text shared by the daily ping, /status and the startup notification."""
+    status = "Motion detector On" if is_active else "Motion detector Off"
     uptime = datetime.now(TZ) - START_TIME
     days, hours, minutes = uptime.days, uptime.seconds // 3600, (uptime.seconds % 3600) // 60
     camera_status = "OK" if detector is not None and detector.camera_ok() else "⚠️ NO FRAMES"
+    if detector is None:
+        lighting_status = "unknown"
+    else:
+        lighting = detector.lighting_status()
+        lighting_status = "🌞 Day" if lighting is True else "🌙 Night" if lighting is False else "unknown (calibrating)"
+    header = "🔄 System just started." if startup else "✅ Daily check-in: system online."
     message = (
-        f"✅ Daily check-in: system online. Status: {status}\n"
+        f"{header}\n"
+        f"Status: {status}\n"
         f"📷 Camera: {camera_status}\n"
+        f"💡 Lighting detected: {lighting_status}\n"
         f"🕒 Running since: {START_TIME.strftime('%Y-%m-%d %H:%M:%S %Z')} (uptime: {days}d {hours}h {minutes}m)"
     )
-    await notify_all(context.bot, message)
+    return message
+
+
+async def daily_ping(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Confirms the bot is alive; a missed ping signals a prolonged outage."""
+    await notify_all(context.bot, build_status_message())
 
 
 async def retry_pending_uploads(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -768,6 +800,9 @@ async def post_init(telegram_app: Application) -> None:
         retry_pending_uploads, interval=RETRY_INTERVAL_SECONDS, first=30, name="retry_pending_uploads"
     )
 
+    # Notifies on every (re)start, e.g. after a reboot or a systemd restart following a crash.
+    await notify_all(telegram_app.bot, build_status_message(startup=True))
+
 
 async def post_shutdown(telegram_app: Application) -> None:
     camera.stop()
@@ -794,6 +829,7 @@ def main() -> None:
     telegram_app.add_handler(CommandHandler("start_motion", cmd_start_motion, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("photo", cmd_photo, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("video", cmd_video, filters=allowed_users_filter))
+    telegram_app.add_handler(CommandHandler("status", cmd_status, filters=allowed_users_filter))
     telegram_app.add_handler(CallbackQueryHandler(handle_callbacks))
     telegram_app.add_error_handler(error_handler)
 
