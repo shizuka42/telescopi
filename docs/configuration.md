@@ -29,9 +29,9 @@ Pour modifier une variable, il faut éditer `~/telescopi/config/.env` en ajoutan
 
 | Variable | Défaut | Rôle | Comment la remplir |
 |---|---|---|---|
-| `THRESHOLD_DAY` | `300` | taille minimale (en pixels de l'image d'analyse, ~320 px de large) de la zone en mouvement pour déclencher une alerte, de jour | entier positif ; augmenter si trop de fausses alertes de jour, ex. `THRESHOLD_DAY=450` |
+| `THRESHOLD_DAY` | `500` | taille minimale (en pixels de l'image d'analyse, ~320 px de large) de la zone en mouvement pour déclencher une alerte, de jour | entier positif ; augmenter si trop de fausses alertes de jour, ex. `THRESHOLD_DAY=450` |
 | `THRESHOLD_NIGHT` | `100` | idem `THRESHOLD_DAY` mais de nuit (le bruit IR / faible lumière impose souvent un seuil plus élevé) | entier positif, ex. `THRESHOLD_NIGHT=150` |
-| `BRIGHTNESS_DAY_NIGHT_THRESHOLD` | `60` | niveau de gris moyen (0-255) de l'image d'analyse en dessous duquel la scène est considérée comme nocturne | entier entre 0 et 255, ex. `BRIGHTNESS_DAY_NIGHT_THRESHOLD=50` |
+| `BRIGHTNESS_DAY_NIGHT_THRESHOLD` | `30` | niveau de gris moyen (0-255) de l'image d'analyse en dessous duquel la scène est considérée comme nocturne | entier entre 0 et 255, ex. `BRIGHTNESS_DAY_NIGHT_THRESHOLD=50` |
 | `PIXEL_DIFF_THRESHOLD` | `25` | écart de niveau de gris (0-255) à partir duquel un pixel est considéré comme "en mouvement" | entier entre 0 et 255, ex. `PIXEL_DIFF_THRESHOLD=30` |
 | `MOTION_CONSECUTIVE_FRAMES` | `2` | nombre d'images consécutives en mouvement nécessaires avant déclenchement (filtre les faux positifs isolés) | entier positif, ex. `MOTION_CONSECUTIVE_FRAMES=3` |
 | `DETECTION_FPS` | `10` | fréquence (images/seconde) à laquelle le flux d'analyse est examiné pour détecter le mouvement | entier positif, ex. `DETECTION_FPS=15` |

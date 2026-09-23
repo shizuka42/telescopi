@@ -80,10 +80,10 @@ DELAY_AFTER_MOTION = _env_int("DELAY_AFTER_MOTION", 5)     # cool-down once a mo
 # Motion analysis (runs on the small "lores" stream). Areas are in pixels of that analysis frame.
 LORES_WIDTH = 320
 LORES_HEIGHT = int(round(LORES_WIDTH * VIDEO_HEIGHT / VIDEO_WIDTH / 2)) * 2  # even, same aspect as main
-THRESHOLD_DAY = _env_int("THRESHOLD_DAY", 300)     # min size (px of the 320-wide frame) of the moving blob, daylight
+THRESHOLD_DAY = _env_int("THRESHOLD_DAY", 500)     # min size (px of the 320-wide frame) of the moving blob, daylight
 THRESHOLD_NIGHT = _env_int("THRESHOLD_NIGHT", 100)  # same at night (IR / low light noise -> higher)
 # Mean gray level (0-255) of the analysis frame below which the scene is considered "night".
-BRIGHTNESS_DAY_NIGHT_THRESHOLD = _env_int("BRIGHTNESS_DAY_NIGHT_THRESHOLD", 60)
+BRIGHTNESS_DAY_NIGHT_THRESHOLD = _env_int("BRIGHTNESS_DAY_NIGHT_THRESHOLD", 30)
 PIXEL_DIFF_THRESHOLD = _env_int("PIXEL_DIFF_THRESHOLD", 25)  # gray-level change for a pixel to count as "moving"
 MOTION_CONSECUTIVE_FRAMES = _env_int("MOTION_CONSECUTIVE_FRAMES", 2)  # filters one-frame glitches
 DETECTION_FPS = _env_int("DETECTION_FPS", 10)
