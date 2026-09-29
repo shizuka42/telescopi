@@ -940,7 +940,7 @@ async def cmd_help_impl(bot, chat_id):
 
 
 async def cmd_status_impl(bot, chat_id):
-    await bot.send_message(chat_id, build_status_message(), reply_markup=get_main_keyboard())
+    await bot.send_message(chat_id, build_status_message(), reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 
 async def cmd_photo_impl(bot, chat_id):
@@ -1152,6 +1152,7 @@ def main() -> None:
     telegram_app.add_handler(CommandHandler("photo", cmd_photo, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("video", cmd_video, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("status", cmd_status, filters=allowed_users_filter))
+    telegram_app.add_handler(CommandHandler("start", cmd_status, filters=allowed_users_filter))
     telegram_app.add_handler(CallbackQueryHandler(handle_callbacks))
     telegram_app.add_error_handler(error_handler)
 

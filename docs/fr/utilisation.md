@@ -28,7 +28,7 @@ En plus de répondre à la commande `/status`, TeleScoPi envoie automatiquement 
 ## Accès aux logs
 
 Les logs du service TeleScoPi sont conservés pendant 7 jours et sont copiés quotidiennement dans le répertoire `~/telescopi/logs` pour un accès plus facile.
-Pour parcourir les logs stockés du service (en étant connecté en ssh sur le Raspberry Pi) :
+Pour parcourir les logs stockés du service (en étant connecté en ssh sur le Raspberry Pi via `ssh pi@homepi.local`.) :
 
 ```
 # Tous les logs du service telescopi
@@ -39,6 +39,9 @@ journalctl -u telescopi -f
 
 # Les 50 dernières lignes
 journalctl -u telescopi -n 50
+
+# Les logs entre 14h00 et 14h10
+journalctl -u telescopi --since "14:00" --until "14:10"
 
 # Depuis le dernier démarrage du service
 journalctl -u telescopi -b

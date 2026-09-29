@@ -125,7 +125,7 @@ sudo journalctl --rotate
 
 mkdir -p /home/pi/telescopi/logs
 CRON_JOB=$(cat <<EOF
-55 23 * * * journalctl -u telescopi --since "00:00" --until "23:59" > "$HOME/telescopi/logs/telescopi-\$(date +%F).log" 2>&1 && find "$HOME/telescopi/logs" -name "telescopi-*.log" -mtime +7 -delete
+55 23 * * * journalctl -u telescopi --since "00:00" --until "23:59" > "$HOME/telescopi/logs/telescopi-\$(date +\%F).log" 2>&1 && find "$HOME/telescopi/logs" -name "telescopi-*.log" -mtime +7 -delete
 EOF
 )
 (crontab -l 2>/dev/null | grep -F -q "$CRON_JOB") || \
