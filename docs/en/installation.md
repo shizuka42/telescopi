@@ -110,3 +110,7 @@ You need to verify that the camera you have chosen is correctly identified.
 8. Open the bot's Telegram interface to interact with TeleScoPi and verify that notifications and commands work correctly.
 
 If you wish, you can customize the Telegram bot to suit your preferences, including its avatar, menu, description, and other settings, by following the instructions provided by BotFather on Telegram.
+
+## Live Stream (Optional)
+
+`scripts/telescopi_setup.sh` offers to set up an on-demand RTSP live view of the camera during installation (`CAMERA_BACKEND=usb` only). See the dedicated [Live Stream guide](./live-stream.md) for details and manual setup.

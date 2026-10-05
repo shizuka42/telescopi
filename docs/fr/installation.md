@@ -108,3 +108,7 @@ Il faut vérifier que la caméra que vous avez choisi est bien identifiée.
 8. Accédez à l'interface Telegram du bot pour interagir avec TeleScoPi et vérifier que les notifications et commandes fonctionnent correctement.
 
 Si vous le souhaitez, vous pouvez personnaliser le bot Telegram à votre convenance (avatar, menu, description, etc.) en suivant les instructions fournies par le BotFather sur Telegram.
+
+## Flux vidéo en direct (optionnel)
+
+`scripts/telescopi_setup.sh` propose de configurer un accès RTSP à la demande au flux de la caméra pendant l'installation (`CAMERA_BACKEND=usb` uniquement). Consultez le guide dédié [Flux en direct](./live-stream.md) pour les détails et une configuration manuelle.

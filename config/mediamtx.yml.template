@@ -1,0 +1,49 @@
+# MediaMTX config for the TeleScoPi live stream (see docs/en/live-stream.md).
+# RTSP only, reached exclusively through your VPN tunnel - never expose this service directly to
+# the internet. Replace the ${...} placeholders below, then copy this file to
+# /usr/local/etc/mediamtx.yml and (re)start the mediamtx service.
+# Official reference config (verified 2026-10-05): https://github.com/bluenviron/mediamtx/blob/main/mediamtx.yml
+
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+
+# Only the RTSP server is needed; every other protocol/server is disabled.
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+moq: no
+metrics: no
+pprof: no
+playback: no
+
+# Local control API telescopi.py polls to detect when nobody is watching (auto-stop the
+# publisher). Keep this loopback-only - never expose this port on the VPN or the LAN.
+api: yes
+apiAddress: 127.0.0.1:9997
+
+# Overrides MediaMTX's default example users (which allow anyone to publish/read any path
+# without a password): only the two accounts below may publish/read, and only on path "cam".
+authInternalUsers:
+  - user: ${LIVE_STREAM_PUBLISH_USER}
+    pass: ${LIVE_STREAM_PUBLISH_PASSWORD}
+    ips: ["127.0.0.1", "::1"]  # telescopi.py always publishes from localhost
+    permissions:
+      - action: publish
+        path: cam
+  - user: ${LIVE_STREAM_READ_USER}
+    pass: ${LIVE_STREAM_READ_PASSWORD}
+    ips: []  # reached only through your VPN interface, see docs/en/live-stream.md
+    permissions:
+      - action: read
+        path: cam
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: api
+
+paths:
+  cam:
+    source: publisher

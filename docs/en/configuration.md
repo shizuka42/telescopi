@@ -38,6 +38,23 @@ To modify a variable, edit `~/telescopi/config/.env` by adding or modifying the 
 | `WEBCAM_DEVICE` | `0` | V4L2 path of the camera, preferably by id (e.g., `/dev/v4l/by-id/abc-video0`) or the numeric index of the camera | ex. `WEBCAM_DEVICE=/dev/v4l/by-id/abc-video0` |
 | `WEBCAM_FOURCC` | `MJPG` | video codec ? | `MJPG` ou `YUYV` |
 
+### Live Stream (RTSP, USB backend only - see [Live Stream](./live-stream.md))
+
+| Variable | Default | Purpose | How to set it |
+|---|---|---|---|
+| `LIVE_STREAM_ENABLED` | `0` (disabled) | enables the `/live_start`/`/live_stop` Telegram commands and the RTSP publisher | Boolean: `1`/`true`/`yes`/`on` to enable |
+| `LIVE_STREAM_QUALITY` | `reduced` | `full` reuses `VIDEO_WIDTH`/`VIDEO_HEIGHT`/`VIDEO_FPS`/`VIDEO_BITRATE`; `reduced` uses the lighter defaults below (override individually if needed) | `full` or `reduced` |
+| `LIVE_STREAM_WIDTH` | `640` (reduced) / `VIDEO_WIDTH` (full) | width (px) of the live stream | positive integer, e.g. `LIVE_STREAM_WIDTH=854` |
+| `LIVE_STREAM_HEIGHT` | `360` (reduced) / `VIDEO_HEIGHT` (full) | height (px) of the live stream | positive integer, e.g. `LIVE_STREAM_HEIGHT=480` |
+| `LIVE_STREAM_FPS` | `10` (reduced) / `VIDEO_FPS` (full) | frames per second of the live stream | positive integer, e.g. `LIVE_STREAM_FPS=15` |
+| `LIVE_STREAM_BITRATE` | `600000` (reduced) / `VIDEO_BITRATE` (full) | H.264 encoding bitrate of the live stream, in bits per second | positive integer, e.g. `LIVE_STREAM_BITRATE=1000000` |
+| `LIVE_STREAM_IDLE_TIMEOUT_SECONDS` | `600` | stops the stream after this many seconds without an RTSP viewer | positive integer (seconds), e.g. `LIVE_STREAM_IDLE_TIMEOUT_SECONDS=300` |
+| `LIVE_STREAM_RTSP_URL` | `rtsp://127.0.0.1:8554/cam` | local MediaMTX address telescopi pushes the stream to; never expose this directly | RTSP URL |
+| `LIVE_STREAM_API_URL` | `http://127.0.0.1:9997` | local MediaMTX control API, used to detect when nobody is watching | HTTP URL, loopback-only |
+| `LIVE_STREAM_PUBLISH_USER` / `LIVE_STREAM_PUBLISH_PASSWORD` | *(none)* | credentials telescopi uses to publish to MediaMTX (must match `mediamtx.yml`) | string, e.g. `LIVE_STREAM_PUBLISH_USER=telescopi` |
+| `LIVE_STREAM_READ_USER` / `LIVE_STREAM_READ_PASSWORD` | *(none)* | credentials your RTSP viewers must provide (must match `mediamtx.yml`); the username is shown by `/live_start`, the password never is - your RTSP client prompts for it | string |
+| `LIVE_STREAM_VIEWER_URL` | *(falls back to `LIVE_STREAM_RTSP_URL`)* | URL sent by `/live_start` (credentials are always stripped before sending), typically the Pi's MagicDNS hostname over Tailscale | RTSP URL, e.g. `rtsp://homepi.tailnet-name.ts.net:8554/cam` |
+
 ### Motion Detection
 
 | Variable | Default | Purpose | How to set it |

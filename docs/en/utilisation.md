@@ -17,6 +17,7 @@ The following commands are available on the Telegram bot to interact with TeleSc
 - `/start_motion`: Enable motion detection with the camera.
 - `/stop_motion`: Disable motion detection with the camera.
 - `/status`: Get the system status (monitoring status, camera status, detected day/night mode, and time since the last startup).
+- `/live_start`, `/live_stop`: Start/stop the RTSP live stream (optional, `CAMERA_BACKEND=usb` only - see [Live Stream](./live-stream.md)).
 
 ## Automatic Status Message
 

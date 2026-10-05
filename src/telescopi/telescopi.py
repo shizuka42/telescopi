@@ -28,10 +28,12 @@ import shutil
 import subprocess
 import threading
 import time
+import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time
 from pathlib import Path
+from urllib.parse import quote, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 os.environ.setdefault("LIBCAMERA_LOG_LEVELS", "*:WARN")  # must be set before importing picamera2 (CAMERA_BACKEND=picam only)
@@ -122,6 +124,35 @@ DELAYED_NOTE_AFTER_SECONDS = 120     # replayed items older than this get an "or
 MEDIA_WRITE_TIMEOUT = 120
 MEDIA_READ_TIMEOUT = 60
 
+# Live stream (RTSP, CAMERA_BACKEND=usb only; see docs/en/live-stream.md). Off by default.
+LIVE_STREAM_ENABLED = _env_bool("LIVE_STREAM_ENABLED", False)
+LIVE_STREAM_QUALITY = os.environ.get("LIVE_STREAM_QUALITY", "reduced").strip().lower()
+if LIVE_STREAM_QUALITY not in ("full", "reduced"):
+    raise SystemExit(f"Invalid LIVE_STREAM_QUALITY={LIVE_STREAM_QUALITY!r}: expected 'full' or 'reduced'")
+if LIVE_STREAM_QUALITY == "full":
+    LIVE_STREAM_WIDTH = _env_int("LIVE_STREAM_WIDTH", VIDEO_WIDTH)
+    LIVE_STREAM_HEIGHT = _env_int("LIVE_STREAM_HEIGHT", VIDEO_HEIGHT)
+    LIVE_STREAM_FPS = _env_int("LIVE_STREAM_FPS", VIDEO_FPS)
+    LIVE_STREAM_BITRATE = _env_int("LIVE_STREAM_BITRATE", VIDEO_BITRATE)
+else:
+    LIVE_STREAM_WIDTH = _env_int("LIVE_STREAM_WIDTH", 640)
+    LIVE_STREAM_HEIGHT = _env_int("LIVE_STREAM_HEIGHT", 360)
+    LIVE_STREAM_FPS = _env_int("LIVE_STREAM_FPS", 10)
+    LIVE_STREAM_BITRATE = _env_int("LIVE_STREAM_BITRATE", 600_000)
+# Stops the stream after this many seconds without an RTSP viewer (checked via the MediaMTX API).
+LIVE_STREAM_IDLE_TIMEOUT_SECONDS = _env_int("LIVE_STREAM_IDLE_TIMEOUT_SECONDS", 600)
+# Local MediaMTX instance telescopi pushes to. Never expose this port directly to the internet.
+LIVE_STREAM_RTSP_URL = os.environ.get("LIVE_STREAM_RTSP_URL", "rtsp://127.0.0.1:8554/cam")
+LIVE_STREAM_API_URL = os.environ.get("LIVE_STREAM_API_URL", "http://127.0.0.1:9997")
+# Credentials telescopi uses to publish to MediaMTX (separate from the viewers' read credentials).
+LIVE_STREAM_PUBLISH_USER = os.environ.get("LIVE_STREAM_PUBLISH_USER", "")
+LIVE_STREAM_PUBLISH_PASSWORD = os.environ.get("LIVE_STREAM_PUBLISH_PASSWORD", "")
+# Viewers' username, shown by /live_start so it's not sent over Telegram together with the URL;
+# the password itself is never sent over Telegram (RTSP clients prompt for it, see docs/en/live-stream.md).
+LIVE_STREAM_READ_USER = os.environ.get("LIVE_STREAM_READ_USER", "")
+# URL shown to Telegram users by /live_start, e.g. the VPN address of the Pi; falls back to LIVE_STREAM_RTSP_URL.
+LIVE_STREAM_VIEWER_URL = os.environ.get("LIVE_STREAM_VIEWER_URL", "")
+
 # Supervision: if no frame comes out of the camera for this long, exit and let systemd restart us.
 WATCHDOG_TIMEOUT_SECONDS = 60
 
@@ -170,6 +201,7 @@ recorder = None       # Recorder
 detector = None       # MotionDetector
 outbox = None         # Outbox
 recording_lock = None  # asyncio.Lock: only one clip at a time (one circular output)
+live_publisher = None  # LiveStreamPublisher (CAMERA_BACKEND=usb only)
 
 
 def hard_exit(reason: str) -> None:
@@ -511,6 +543,140 @@ class WebcamRecorder:
                     self._process.returncode, stderr.decode(errors="replace")[-500:],
                 )
         self._process = None
+
+
+def _live_stream_publish_url() -> str:
+    """RTSP publish URL, injecting LIVE_STREAM_PUBLISH_USER/PASSWORD if configured."""
+    if not LIVE_STREAM_PUBLISH_USER:
+        return LIVE_STREAM_RTSP_URL
+    parts = urlsplit(LIVE_STREAM_RTSP_URL)
+    host = f"{parts.hostname}:{parts.port}" if parts.port else parts.hostname
+    netloc = f"{quote(LIVE_STREAM_PUBLISH_USER)}:{quote(LIVE_STREAM_PUBLISH_PASSWORD)}@{host}"
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+
+
+def _strip_url_credentials(url: str) -> str:
+    """Removes any embedded user:pass@ from a URL, so it's safe to send over Telegram."""
+    parts = urlsplit(url)
+    if not parts.hostname:
+        return url
+    host = f"{parts.hostname}:{parts.port}" if parts.port else parts.hostname
+    return urlunsplit((parts.scheme, host, parts.path, "", ""))
+
+
+class LiveStreamPublisher:
+    """On-demand RTSP push of the USB webcam feed to a local MediaMTX server (docs/en/live-stream.md).
+
+    Reuses the same frame fan-out as WebcamRecorder (subscribe/unsubscribe), so it runs independently
+    from motion/manual recordings: the only extra cost is a second software H.264 encode while a
+    viewer is connected. Auto-stops after LIVE_STREAM_IDLE_TIMEOUT_SECONDS without an RTSP reader
+    (polled through the MediaMTX API), so it never runs unattended.
+    """
+
+    def __init__(self, camera: WebcamCameraService):
+        self._camera = camera
+        self._process = None
+        self._writer_thread = None
+        self._idle_thread = None
+        self._queue = None
+        self._stop_event = None
+
+    @property
+    def running(self) -> bool:
+        return self._process is not None and self._process.poll() is None
+
+    def start(self) -> None:
+        if self.running:
+            return
+        self._queue = queue.Queue(maxsize=VIDEO_FPS * 5)
+        self._stop_event = threading.Event()
+        self._camera.subscribe(self._queue)
+
+        cmd = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-f", "rawvideo", "-pix_fmt", "bgr24",
+            "-s", f"{VIDEO_WIDTH}x{VIDEO_HEIGHT}",
+            "-r", str(VIDEO_FPS),
+            "-i", "-",
+            "-an",
+            "-vf", f"scale={LIVE_STREAM_WIDTH}:{LIVE_STREAM_HEIGHT},fps={LIVE_STREAM_FPS}",
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+            "-b:v", str(LIVE_STREAM_BITRATE),
+            "-pix_fmt", "yuv420p",
+            "-f", "rtsp", "-rtsp_transport", "tcp",
+            _live_stream_publish_url(),
+        ]
+        self._process = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+        )
+
+        def _writer():
+            try:
+                while not self._stop_event.is_set():
+                    try:
+                        frame = self._queue.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                    self._process.stdin.write(frame.tobytes())
+            except (BrokenPipeError, OSError):
+                logger.warning("Live stream pipe broken (ffmpeg exited or MediaMTX unreachable)")
+            finally:
+                try:
+                    self._process.stdin.close()
+                except OSError:
+                    pass
+
+        self._writer_thread = threading.Thread(target=_writer, name="live-stream-writer", daemon=True)
+        self._writer_thread.start()
+        self._idle_thread = threading.Thread(target=self._idle_watchdog, name="live-stream-idle", daemon=True)
+        self._idle_thread.start()
+        logger.info(
+            "Live stream started: %s (%dx%d@%dfps)",
+            LIVE_STREAM_RTSP_URL, LIVE_STREAM_WIDTH, LIVE_STREAM_HEIGHT, LIVE_STREAM_FPS,
+        )
+
+    def _idle_watchdog(self) -> None:
+        """Stops the publisher after LIVE_STREAM_IDLE_TIMEOUT_SECONDS without an RTSP reader."""
+        path_name = urlsplit(LIVE_STREAM_RTSP_URL).path.lstrip("/") or "cam"
+        api_url = f"{LIVE_STREAM_API_URL}/v3/paths/get/{path_name}"
+        idle_since = None
+        while not self._stop_event.wait(30):
+            try:
+                with urllib.request.urlopen(api_url, timeout=5) as resp:
+                    has_reader = bool(json.loads(resp.read()).get("readers"))
+            except Exception:
+                logger.warning("Could not query MediaMTX readers at %s, assuming someone is watching", api_url)
+                idle_since = None
+                continue
+            if has_reader:
+                idle_since = None
+                continue
+            idle_since = idle_since or time.monotonic()
+            if time.monotonic() - idle_since >= LIVE_STREAM_IDLE_TIMEOUT_SECONDS:
+                logger.info("Live stream idle for %ds, stopping", LIVE_STREAM_IDLE_TIMEOUT_SECONDS)
+                self.stop()
+                return
+
+    def stop(self) -> None:
+        if self._process is None:
+            return
+        self._stop_event.set()
+        if self._writer_thread is not None:
+            self._writer_thread.join(timeout=5)
+        self._camera.unsubscribe(self._queue)
+        process, self._process = self._process, None
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        stderr = b""
+        try:
+            stderr = process.stderr.read()
+        except Exception:
+            pass
+        if process.returncode:
+            logger.error("Live stream ffmpeg exited with %s: %s", process.returncode, stderr.decode(errors="replace")[-500:])
+        logger.info("Live stream stopped")
 
 
 def build_camera_service() -> CameraService:
@@ -926,6 +1092,10 @@ async def handle_motion(telegram_app: Application, result: MotionResult) -> None
 
 # --- SHARED COMMAND IMPLEMENTATIONS (used by both /commands and inline buttons) --------------
 async def cmd_help_impl(bot, chat_id):
+    live_line = (
+        "📡 `/live_start` - Start the RTSP live stream\n🛑 `/live_stop` - Stop the RTSP live stream\n"
+        if LIVE_STREAM_ENABLED else ""
+    )
     help_text = (
         "🛠 *TeleScoPi Bot Control Panel*\n\n"
         "Use the buttons below or the commands:\n"
@@ -933,6 +1103,7 @@ async def cmd_help_impl(bot, chat_id):
         f"📹 `/video` - Record {MANUAL_VIDEO_DURATION}s video (plus the {PRE_ROLL_SECONDS}s before)\n"
         "🟢 `/start_motion` - Enable motion detection\n"
         "🔴 `/stop_motion` - Disable motion detection\n"
+        f"{live_line}"
         "ℹ️ `/status` - System status\n\n"
         "Current Status: " + ("✅ Active Monitoring" if is_active else "❌ System Off")
     )
@@ -1062,6 +1233,48 @@ async def cmd_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await cmd_video_impl(context.bot, update.effective_chat.id)
 
 
+async def cmd_live_start_impl(bot, chat_id):
+    if CAMERA_BACKEND != "usb":
+        await bot.send_message(chat_id, "❌ Live stream only supported with CAMERA_BACKEND=usb.")
+        return
+    if not LIVE_STREAM_ENABLED:
+        await bot.send_message(chat_id, "❌ Live stream disabled (set LIVE_STREAM_ENABLED=1 in the config).")
+        return
+    try:
+        live_publisher.start()
+    except Exception as exc:
+        logger.exception("Live stream start error")
+        await bot.send_message(chat_id, f"❌ Live stream error: {exc}")
+        return
+    url = _strip_url_credentials(LIVE_STREAM_VIEWER_URL or LIVE_STREAM_RTSP_URL)
+    user_line = f"Username: `{LIVE_STREAM_READ_USER}`\n" if LIVE_STREAM_READ_USER else ""
+    await bot.send_message(
+        chat_id,
+        "🔴 *Live stream started.*\n"
+        f"URL: `{url}`\n"
+        f"{user_line}"
+        "Your RTSP client will prompt for the password (not sent here - check your config).\n"
+        f"Auto-stops after {LIVE_STREAM_IDLE_TIMEOUT_SECONDS // 60} min without a viewer, or use /live_stop.",
+        parse_mode="Markdown",
+    )
+
+
+async def cmd_live_stop_impl(bot, chat_id):
+    if CAMERA_BACKEND != "usb" or not LIVE_STREAM_ENABLED:
+        await bot.send_message(chat_id, "❌ Live stream not available.")
+        return
+    live_publisher.stop()
+    await bot.send_message(chat_id, "🛑 Live stream stopped.")
+
+
+async def cmd_live_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_live_start_impl(context.bot, update.effective_chat.id)
+
+
+async def cmd_live_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_live_stop_impl(context.bot, update.effective_chat.id)
+
+
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await cmd_status_impl(context.bot, update.effective_chat.id)
 
@@ -1085,6 +1298,8 @@ def build_status_message(startup: bool = False) -> str:
         f"💡 Lighting detected: {lighting_status}\n"
         f"🕒 Running since: {START_TIME.strftime('%Y-%m-%d %H:%M:%S %Z')} (uptime: {days}d {hours}h {minutes}m)"
     )
+    if LIVE_STREAM_ENABLED and live_publisher is not None:
+        message += f"\n📡 Live stream: {'🔴 streaming' if live_publisher.running else '⏸ idle'}"
     return message
 
 
@@ -1126,6 +1341,8 @@ async def post_init(telegram_app: Application) -> None:
 
 
 async def post_shutdown(telegram_app: Application) -> None:
+    if live_publisher is not None:
+        live_publisher.stop()
     camera.stop()
 
 
@@ -1134,12 +1351,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def main() -> None:
-    global camera, recorder, outbox
+    global camera, recorder, outbox, live_publisher
     logger.info("Camera backend: %s", CAMERA_BACKEND)
     camera = build_camera_service()
     camera.start()  # fails fast (and systemd restarts us) if the camera is unavailable
     recorder = camera.create_recorder()
     outbox = Outbox(CAPTURES_DIR / "outbox")
+    live_publisher = LiveStreamPublisher(camera) if CAMERA_BACKEND == "usb" else None
 
     allowed_users_filter = filters.User(user_id=ALLOWED_USER_IDS)
     telegram_app = (
@@ -1153,6 +1371,8 @@ def main() -> None:
     telegram_app.add_handler(CommandHandler("video", cmd_video, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("status", cmd_status, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("start", cmd_status, filters=allowed_users_filter))
+    telegram_app.add_handler(CommandHandler("live_start", cmd_live_start, filters=allowed_users_filter))
+    telegram_app.add_handler(CommandHandler("live_stop", cmd_live_stop, filters=allowed_users_filter))
     telegram_app.add_handler(CallbackQueryHandler(handle_callbacks))
     telegram_app.add_error_handler(error_handler)
 

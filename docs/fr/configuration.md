@@ -38,6 +38,23 @@ Pour modifier une variable, il faut éditer `~/telescopi/config/.env` en ajoutan
 | `WEBCAM_DEVICE` | `0` | Chemin V4L2 de la caméra de préférence par id (exemple `/dev/v4l/by-id/abc-video0`) ou index numérique de la caméra | ex. `WEBCAM_DEVICE=/dev/v4l/by-id/abc-video0` |
 | `WEBCAM_FOURCC` | `MJPG` | Codec vidéo ? | `MJPG` ou `YUYV` |
 
+### Flux en direct (RTSP, backend USB uniquement - voir [Flux en direct](./live-stream.md))
+
+| Variable | Défaut | Rôle | Comment la remplir |
+|---|---|---|---|
+| `LIVE_STREAM_ENABLED` | `0` (désactivé) | active les commandes Telegram `/live_start`/`/live_stop` et le diffuseur RTSP | booléen : `1`/`true`/`yes`/`on` pour activer |
+| `LIVE_STREAM_QUALITY` | `reduced` | `full` reprend `VIDEO_WIDTH`/`VIDEO_HEIGHT`/`VIDEO_FPS`/`VIDEO_BITRATE` ; `reduced` utilise les valeurs allégées ci-dessous (surchargeables individuellement) | `full` ou `reduced` |
+| `LIVE_STREAM_WIDTH` | `640` (reduced) / `VIDEO_WIDTH` (full) | largeur (px) du flux en direct | entier positif, ex. `LIVE_STREAM_WIDTH=854` |
+| `LIVE_STREAM_HEIGHT` | `360` (reduced) / `VIDEO_HEIGHT` (full) | hauteur (px) du flux en direct | entier positif, ex. `LIVE_STREAM_HEIGHT=480` |
+| `LIVE_STREAM_FPS` | `10` (reduced) / `VIDEO_FPS` (full) | images par seconde du flux en direct | entier positif, ex. `LIVE_STREAM_FPS=15` |
+| `LIVE_STREAM_BITRATE` | `600000` (reduced) / `VIDEO_BITRATE` (full) | débit de l'encodage H.264 du flux en direct, en bits/seconde | entier positif, ex. `LIVE_STREAM_BITRATE=1000000` |
+| `LIVE_STREAM_IDLE_TIMEOUT_SECONDS` | `600` | arrête le flux après ce nombre de secondes sans spectateur RTSP | entier positif (secondes), ex. `LIVE_STREAM_IDLE_TIMEOUT_SECONDS=300` |
+| `LIVE_STREAM_RTSP_URL` | `rtsp://127.0.0.1:8554/cam` | adresse locale de MediaMTX vers laquelle telescopi diffuse le flux ; à ne jamais exposer directement | URL RTSP |
+| `LIVE_STREAM_API_URL` | `http://127.0.0.1:9997` | API de contrôle locale de MediaMTX, utilisée pour détecter l'absence de spectateur | URL HTTP, boucle locale uniquement |
+| `LIVE_STREAM_PUBLISH_USER` / `LIVE_STREAM_PUBLISH_PASSWORD` | *(aucun)* | identifiants utilisés par telescopi pour publier vers MediaMTX (doivent correspondre à `mediamtx.yml`) | chaîne, ex. `LIVE_STREAM_PUBLISH_USER=telescopi` |
+| `LIVE_STREAM_READ_USER` / `LIVE_STREAM_READ_PASSWORD` | *(aucun)* | identifiants que vos spectateurs RTSP doivent fournir (doivent correspondre à `mediamtx.yml`) ; le nom d'utilisateur est affiché par `/live_start`, le mot de passe ne l'est jamais - votre client RTSP le demande | chaîne |
+| `LIVE_STREAM_VIEWER_URL` | *(repli sur `LIVE_STREAM_RTSP_URL`)* | URL envoyée par `/live_start` (les identifiants sont toujours retirés avant l'envoi), en général le nom d'hôte MagicDNS du Pi via Tailscale | URL RTSP, ex. `rtsp://homepi.tailnet-name.ts.net:8554/cam` |
+
 ### Détection de mouvement
 
 | Variable | Défaut | Rôle | Comment la remplir |

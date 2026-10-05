@@ -17,6 +17,7 @@ Voici les commandes disponibles sur le bot Telegram pour interagir avec TeleScoP
 - `/start_motion` : Activer la détection de mouvement avec la caméra.
 - `/stop_motion` : Désactiver la détection de mouvement avec la caméra.
 - `/status` : Obtenir le statut du système (statut de la surveillance, de la caméra, jour/nuit détecté, durée depuis le dernier démarrage).
+- `/live_start`, `/live_stop` : Démarrer/arrêter le flux vidéo en direct RTSP (optionnel, `CAMERA_BACKEND=usb` uniquement - voir [Flux en direct](./live-stream.md)).
 
 ## Message automatique de vérification
 
