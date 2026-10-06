@@ -1,0 +1,24 @@
+[project]
+name = "telescopi"
+version = "1.0.1"
+description = "Telegram-controlled security camera for Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-telegram-bot[all]~=22.8",
+]
+
+# Picamera2, libcamera, numpy and OpenCV come from apt (see docs/en/installation.md) and are
+# exposed to the project's venv via --system-site-packages. Do NOT add picamera2, opencv-python
+# or numpy here as project dependencies: installing them via pip risks conflicts with the
+# apt-provided builds (e.g. numpy ABI mismatch, missing libcamera bindings).
+
+[project.scripts]
+telescopi = "telescopi.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/telescopi"]

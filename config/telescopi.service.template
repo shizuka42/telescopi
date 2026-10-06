@@ -10,7 +10,7 @@ User=${USER}
 WorkingDirectory=/home/${USER}/telescopi
 EnvironmentFile=/home/${USER}/telescopi/config/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/${USER}/telescopi/venv/bin/python3 /home/${USER}/telescopi/src/telescopi/telescopi.py
+ExecStart=/home/${USER}/telescopi/.venv/bin/telescopi
 Restart=always
 RestartSec=5
 

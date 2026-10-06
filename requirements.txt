@@ -1,3 +1,0 @@
-# Picamera2, libcamera, numpy et OpenCV viennent d'apt (voir README) et sont visibles dans le venv
-# grâce à --system-site-packages. Ne PAS les installer via pip (risque de conflit sur numpy).
-python-telegram-bot[all]~=22.8

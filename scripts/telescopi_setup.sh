@@ -80,9 +80,9 @@ echo "Configuration completed successfully."
 
 echo "Installing required packages..."
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip
+sudo apt-get install -y python3 python3-venv python3-pip
 sudo apt install -y python3-picamera2 --no-install-recommends
-sudo apt install -y python3-opencv python3-venv ffmpeg
+sudo apt install -y python3-opencv ffmpeg
 echo "Required packages installed successfully."
 
 ################
@@ -91,10 +91,11 @@ echo "Required packages installed successfully."
 
 echo "Initializing Python virtual environment..."
 
-python3 -m venv --system-site-packages "${HOME}"/telescopi/venv
-source "${HOME}"/telescopi/venv/bin/activate
-pip install -r "${HOME}"/telescopi/requirements.txt
-python3 -c "from picamera2 import Picamera2; import cv2, numpy; print('OK')"
+cd "${HOME}"/telescopi
+python3 -m venv --system-site-packages .venv
+"${HOME}"/telescopi/.venv/bin/pip install --upgrade pip
+"${HOME}"/telescopi/.venv/bin/pip install .
+"${HOME}"/telescopi/.venv/bin/python3 -c "from picamera2 import Picamera2; import cv2, numpy; print('OK')"
 echo "Python virtual environment initialized successfully."
 
 ################
