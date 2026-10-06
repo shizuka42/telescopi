@@ -3,7 +3,25 @@
 [![Language-English](https://img.shields.io/badge/Language-English-blue)](../en/implementation.md)
 [![Language-Français](https://img.shields.io/badge/Langue-Fran%C3%A7ais-green)](../fr/implementation.md)
 
-# TeleScopi Implementation Information
+## Prerequisites on developer workstation
+
+- python 3.10 or higher
+- pip
+
+## Structure
+
+- Code is split into modules under `src/telescopi/` :
+  - `main.py` : entry point, installed as the `telescopi` command
+  - `config.py` : env vars, logging
+  - `state.py` : shared runtime state
+  - `camera.py` : Picamera2/USB backends
+  - `motion.py` : motion detection
+  - `outbox.py` : persistent delivery queue
+  - `recording.py` : motion clip capture/upload
+  - `ui.py` : Telegram keyboard
+  - `bot.py` : commands and handlers
+
+## More Information
 
 - A single Picamera2 pipeline remains open at all times:
   - the `main` stream (1280x720 by default) is encoded in H.264 by the Pi's hardware and written to a **circular buffer** containing the last few seconds;

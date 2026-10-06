@@ -5,7 +5,7 @@
 
 # Configuration de TeleScoPi
 
-Toute la configuration de TeleScoPi passe par des variables d'environnement, lues au démarrage du processus `telescopi.py` depuis le fichier `~/telescopi/config/.env` (chargé par le service telescopi).
+Toute la configuration de TeleScoPi passe par des variables d'environnement, lues au démarrage du processus `telescopi` depuis le fichier `~/telescopi/config/.env` (chargé par le service telescopi).
 
 Les deux variables obligatoires (`BOT_TOKEN` et `ALLOWED_USER_IDS`) sont demandées et écrites dans ce fichier par le script d'installation. Toutes les autres sont optionnelles : si elles sont absentes du fichier, la valeur par défaut indiquée ci-dessous s'applique.
 
