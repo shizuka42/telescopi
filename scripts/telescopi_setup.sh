@@ -55,11 +55,11 @@ while true; do
     esac
 done
 
-read -r -s -p "Camera settings : picam or usb ? " A_CAMERA_TYPE
+read -r -p "Camera settings : picam or usb ? " A_CAMERA_TYPE
 echo
 while [[ "${A_CAMERA_TYPE}" != "picam" && "${A_CAMERA_TYPE}" != "usb" ]]; do
     echo "Invalid camera type. Please enter 'picam' or 'usb'."
-    read -r -s -p "Camera settings : picam or usb ? " A_CAMERA_TYPE
+    read -r -p "Camera settings : picam or usb ? " A_CAMERA_TYPE
     echo
 done
 
