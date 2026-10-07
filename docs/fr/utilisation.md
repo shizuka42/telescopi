@@ -17,6 +17,7 @@ Voici les commandes disponibles sur le bot Telegram pour interagir avec TeleScoP
 - `/start_motion` : Activer la détection de mouvement avec la caméra.
 - `/stop_motion` : Désactiver la détection de mouvement avec la caméra.
 - `/status` : Obtenir le statut du système (statut de la surveillance, de la caméra, jour/nuit détecté, durée depuis le dernier démarrage).
+- `/restart` : Redémarrer immédiatement le service TeleScoPi (par exemple pour corriger des glitches de la caméra). Attend la fin d'un éventuel enregistrement en cours, puis quitte le processus pour que systemd (`Restart=always`) relance le service aussitôt.
 
 ## Message automatique de vérification
 

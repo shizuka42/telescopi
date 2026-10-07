@@ -43,6 +43,7 @@ def main() -> None:
     telegram_app.add_handler(CommandHandler("photo", bot.cmd_photo, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("video", bot.cmd_video, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("status", bot.cmd_status, filters=allowed_users_filter))
+    telegram_app.add_handler(CommandHandler("restart", bot.cmd_restart, filters=allowed_users_filter))
     telegram_app.add_handler(CommandHandler("start", bot.cmd_status, filters=allowed_users_filter))
     telegram_app.add_handler(CallbackQueryHandler(bot.handle_callbacks))
     telegram_app.add_error_handler(bot.error_handler)
