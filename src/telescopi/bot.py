@@ -19,6 +19,7 @@ from telescopi.config import (
     RETRY_INTERVAL_SECONDS,
     START_TIME,
     TZ,
+    hard_exit,
     logger,
 )
 from telescopi.motion import MotionDetector, watchdog
@@ -36,7 +37,8 @@ async def cmd_help_impl(bot, chat_id):
         f"📹 `/video` - Record {MANUAL_VIDEO_DURATION}s video (plus the {PRE_ROLL_SECONDS}s before)\n"
         "🟢 `/start_motion` - Enable motion detection\n"
         "🔴 `/stop_motion` - Disable motion detection\n"
-        "ℹ️ `/status` - System status\n\n"
+        "ℹ️ `/status` - System status\n"
+        "🔄 `/restart` - Restart the service (e.g. after camera glitches)\n\n"
         "Current Status: " + ("✅ Active Monitoring" if state.is_active else "❌ System Off")
     )
     await bot.send_message(chat_id, help_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
@@ -163,6 +165,17 @@ async def cmd_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await cmd_status_impl(context.bot, update.effective_chat.id)
+
+
+async def cmd_restart_impl(bot, chat_id):
+    await bot.send_message(chat_id, "🔄 Restarting service...")
+    async with state.recording_lock:  # waits for any in-progress recording/capture to finish first
+        pass
+    hard_exit(f"Manual restart requested via /restart (chat {chat_id})")
+
+
+async def cmd_restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_restart_impl(context.bot, update.effective_chat.id)
 
 
 def build_status_message(startup: bool = False) -> str:

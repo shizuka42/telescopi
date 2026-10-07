@@ -17,6 +17,7 @@ The following commands are available on the Telegram bot to interact with TeleSc
 - `/start_motion`: Enable motion detection with the camera.
 - `/stop_motion`: Disable motion detection with the camera.
 - `/status`: Get the system status (monitoring status, camera status, detected day/night mode, and time since the last startup).
+- `/restart`: Restart the TeleScoPi service immediately (e.g. to clear up camera glitches). Waits for any in-progress recording to finish, then exits so that systemd (`Restart=always`) restarts the service right away.
 
 ## Automatic Status Message
 
