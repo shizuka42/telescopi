@@ -39,14 +39,13 @@ Après avoir flashé et inséré la carte microSD dans le Raspberry Pi, procéde
 
 1. Insérez la carte microSD dans le Raspberry Pi et connectez l'alimentation.
 2. Connectez-vous au Raspberry Pi via SSH sur votre réseau local : `ssh pi@homepi.local`.
-3. Créez un répertoire pour le projet TeleScoPi sur le Raspberry Pi : `mkdir -p ~/telescopi`
-4. Faire les mises à jour du système en exécutant les commandes suivantes :
+3. Faire les mises à jour du système en exécutant les commandes suivantes :
    ```bash
    sudo apt update
    sudo apt upgrade -y
    sudo apt full-upgrade -y
    ```
-5. Redémarrez le Raspberry Pi pour appliquer les mises à jour : `sudo reboot`
+4. Redémarrez le Raspberry Pi pour appliquer les mises à jour : `sudo reboot`
 
 ### Configuration du réseau Wi-Fi
 
@@ -98,13 +97,11 @@ Il faut vérifier que la caméra que vous avez choisi est bien identifiée.
 
 ## Installation de TeleScoPi
 
-1. Transférez les fichiers du projet TeleScoPi sur le Raspberry Pi, par exemple en utilisant `scp -r /local/path/to/TeleScoPi pi@homepi.local:/home/pi/telescopi/`
-2. Connectez-vous au Raspberry Pi via SSH : `ssh pi@homepi.local`.
-3. Accédez au répertoire du projet sur le Raspberry Pi : `cd ~/telescopi`
-4. Corrigez le script d'installation si besoin : `dos2unix scripts/telescopi_setup.sh`
-5. Donnez les droits d'exécution au script : `chmod +x scripts/telescopi_setup.sh`
-6. Exécutez le script d'installation de TeleScoPi et suivez ses instructions : `scripts/telescopi_setup.sh`.
-7. Observez les logs du service TeleScoPi pour vérifier que tout démarre correctement : `journalctl -u telescopi -f`.
-8. Accédez à l'interface Telegram du bot pour interagir avec TeleScoPi et vérifier que les notifications et commandes fonctionnent correctement.
+1. Connectez-vous au Raspberry Pi via SSH : `ssh pi@homepi.local`.
+2. Téléchargez le script de téléchargement de TeleScoPi depuis la branche `main` du dépôt : `curl -fsSL -o telescopi_download.sh https://raw.githubusercontent.com/shizuka42/telescopi/main/scripts/telescopi_download.sh`
+3. Exécutez-le et suivez ses instructions : `bash telescopi_download.sh`. Il demande quelle version installer, télécharge les sources de la release correspondante dans `~/telescopi` et rend exécutable le script d'installation.
+4. Exécutez le script d'installation de TeleScoPi indiqué en fin d'étape précédente et suivez ses instructions.
+5. Observez les logs du service TeleScoPi pour vérifier que tout démarre correctement : `journalctl -u telescopi -f`.
+6. Accédez à l'interface Telegram du bot pour interagir avec TeleScoPi et vérifier que les notifications et commandes fonctionnent correctement.
 
 Si vous le souhaitez, vous pouvez personnaliser le bot Telegram à votre convenance (avatar, menu, description, etc.) en suivant les instructions fournies par le BotFather sur Telegram.
